@@ -33,7 +33,22 @@ export type Item = {
   notes: string
 }
 
+export type ThemeName = 'indigo' | 'ocean' | 'forest' | 'sunset' | 'mono'
+
+export type TimerMode = 'pomodoro' | 'timer'
+
+export type TimerSession = {
+  id: string
+  date: ISODate
+  mode: TimerMode
+  taskId: string | null
+  minutes: number
+  createdAt: number // epoch ms (for ordering)
+}
+
 export type AppData = {
   intervalSets: IntervalSet[]
   items: Item[]
+  sessions: TimerSession[]
+  ui: { theme: ThemeName }
 }

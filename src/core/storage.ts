@@ -1,4 +1,4 @@
-import type { AppData, IntervalSet, Item, Priority } from './types'
+import type { AppData, IntervalSet, Item, Priority, ThemeName, TimerSession } from './types'
 import { todayJST } from './date'
 import { uid } from './id'
 
@@ -36,7 +36,7 @@ function seed(): AppData {
     isDefault: false,
     createdAt: t,
   }
-  return { intervalSets: [defaultSet, memSet, longSet, noReviewSet], items: [] }
+  return { intervalSets: [defaultSet, memSet, longSet, noReviewSet], items: [], sessions: [], ui: { theme: 'indigo' } }
 }
 
 function normalizePriority(p: any): Priority {
@@ -76,7 +76,12 @@ function normalize(data: AppData): AppData {
     notes: typeof it.notes === 'string' ? it.notes : '',
   })) as Item[]
 
-  return { intervalSets, items }
+  const sessions = (data as any).sessions ?? []
+  const ui = (data as any).ui ?? { theme: 'indigo' }
+  const theme = (ui.theme as ThemeName) ?? 'indigo'
+  const ui2 = { theme }
+
+  return { intervalSets, items, sessions: sessions as TimerSession[], ui: ui2 }
 }
 
 export function loadData(): AppData {

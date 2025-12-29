@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/core/date.ts","./src/core/id.ts","./src/core/scheduler.ts","./src/core/storage.ts","./src/core/types.ts","./src/core/validate.ts","./src/ui/AddView.tsx","./src/ui/App.tsx","./src/ui/CalendarView.tsx","./src/ui/ListView.tsx","./src/ui/SettingsView.tsx","./src/ui/TimerView.tsx","./src/ui/TodayView.tsx"],"errors":true,"version":"5.8.3"}

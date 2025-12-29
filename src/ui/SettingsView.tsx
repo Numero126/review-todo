@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import type { AppData, IntervalSet } from '../core/types'
+import type { AppData, IntervalSet, ThemeName } from '../core/types'
 import { todayJST } from '../core/date'
 import { uid } from '../core/id'
 import { parseIntervals } from '../core/validate'
@@ -68,6 +68,28 @@ export default function SettingsView({ data, setData }: { data: AppData; setData
 
   return (
     <div className="grid" style={{maxWidth:980}}>
+      <div className="card">
+        <div className="row" style={{justifyContent:"space-between"}}>
+          <h1>テーマ</h1>
+          <span className="badge">色を変更できます</span>
+        </div>
+        <div className="sep" />
+        <label>テーマ（配色）</label>
+        <select
+          value={(data.ui?.theme ?? "indigo") as ThemeName}
+          onChange={e => {
+            const t = e.target.value as ThemeName
+            setData({ ...data, ui: { ...(data.ui ?? { theme: "indigo" }), theme: t } })
+          }}
+        >
+          <option value="indigo">Indigo（既定）</option>
+          <option value="ocean">Ocean（青〜水色）</option>
+          <option value="forest">Forest（緑）</option>
+          <option value="sunset">Sunset（赤〜オレンジ）</option>
+          <option value="mono">Mono（グレー）</option>
+        </select>
+        <small className="muted" style={{display:"block", marginTop:8}}>※即時に反映されます。</small>
+      </div>
       <div className="card">
         <div className="row" style={{justifyContent:'space-between'}}>
           <h1>復習間隔セット</h1>

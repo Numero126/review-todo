@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import type { AppData } from '../core/types'
 import { loadData, saveData } from '../core/storage'
 import TodayView from './TodayView'
@@ -30,38 +30,40 @@ export default function App() {
     saveData(data)
   }, [data])
 
-  const title = useMemo(() => {
-    if (tab === 'today') return '今日'
-    if (tab === 'add') return '追加'
-    if (tab === 'calendar') return 'カレンダー'
-    if (tab === 'list') return '一覧'
-    return '設定'
-  }, [tab])
+  // Theme
+  useEffect(() => {
+    const theme = (data as any).ui?.theme ?? 'indigo'
+    document.documentElement.dataset.theme = theme
+  }, [data.ui?.theme])
 
   return (
     <>
-      <div className="nav">
-        <div className="nav-inner">
-          <div style={{ fontWeight: 700 }}>復習ToDo</div>
-          <button className={'tab ' + (tab === 'today' ? 'active' : '')} onClick={() => (location.hash = '#today')}>
-            今日
-          </button>
-          <button className={'tab ' + (tab === 'add' ? 'active' : '')} onClick={() => (location.hash = '#add')}>
-            追加
-          </button>
-          <button className={'tab ' + (tab === 'calendar' ? 'active' : '')} onClick={() => (location.hash = '#calendar')}>
-            カレンダー
-          </button>
-          <button className={'tab ' + (tab === 'list' ? 'active' : '')} onClick={() => (location.hash = '#list')}>
-            一覧
-          </button>
-          <button className={'tab ' + (tab === 'timer' ? 'active' : '')} onClick={() => (location.hash = '#timer')}>
-            タイマー
-          </button>
-          <button className={'tab ' + (tab === 'settings' ? 'active' : '')} onClick={() => (location.hash = '#settings')}>
-            設定
-          </button>
-          <div style={{ marginLeft: 'auto', fontSize: 12, color: '#666' }}>{title}</div>
+      <div className="header">
+        <div className="header-inner">
+          <div className="brand" onClick={() => (location.hash = '#today')} style={{ cursor: 'pointer' }}>
+            復習ToDo
+          </div>
+
+          <div className="tabs">
+            <button className={'tab ' + (tab === 'today' ? 'active' : '')} onClick={() => (location.hash = '#today')}>
+              今日
+            </button>
+            <button className={'tab ' + (tab === 'add' ? 'active' : '')} onClick={() => (location.hash = '#add')}>
+              追加
+            </button>
+            <button className={'tab ' + (tab === 'calendar' ? 'active' : '')} onClick={() => (location.hash = '#calendar')}>
+              カレンダー
+            </button>
+            <button className={'tab ' + (tab === 'list' ? 'active' : '')} onClick={() => (location.hash = '#list')}>
+              一覧
+            </button>
+            <button className={'tab ' + (tab === 'timer' ? 'active' : '')} onClick={() => (location.hash = '#timer')}>
+              タイマー
+            </button>
+            <button className={'tab ' + (tab === 'settings' ? 'active' : '')} onClick={() => (location.hash = '#settings')}>
+              設定
+            </button>
+          </div>
         </div>
       </div>
 
@@ -72,8 +74,11 @@ export default function App() {
         {tab === 'list' && <ListView data={data} setData={setData} />}
         {tab === 'timer' && <TimerView data={data} setData={setData} />}
         {tab === 'settings' && <SettingsView data={data} setData={setData} />}
+
         <div className="sep" />
-        <small>データはこのブラウザ内（localStorage）に保存されます。ログインや同期は未実装です。</small>
+        <small style={{ color: 'rgba(255,255,255,.75)' }}>
+          データはこのブラウザ内（localStorage）に保存されます。ログインや同期は未実装です。
+        </small>
       </div>
     </>
   )
