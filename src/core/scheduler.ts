@@ -36,6 +36,18 @@ export function completeItem(data: AppData, itemId: string, date: ISODate = toda
     if (it.id !== itemId) return it
     const set = getSetById(data.intervalSets, it.intervalSetId)
     const intervals = set.intervalsDays
+
+    // 復習なし：完了したら次回予定を作らない（単発タスク用）
+    if (!intervals || intervals.length === 0) {
+      return {
+        ...it,
+        undo: { stage: it.stage, nextDue: it.nextDue, lastDone: it.lastDone },
+        lastDone: date,
+        nextDue: '9999-12-31',
+        stage: 0,
+      }
+    }
+
     const maxStage = Math.max(0, intervals.length - 1)
     const stage = Math.min(Math.max(0, it.stage), maxStage)
     const days = intervals[stage] ?? intervals[maxStage] ?? 1

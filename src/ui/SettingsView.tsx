@@ -5,7 +5,7 @@ import { uid } from '../core/id'
 import { parseIntervals } from '../core/validate'
 
 function serializeIntervals(arr: number[]): string {
-  return arr.join(', ')
+  return arr.length === 0 ? 'なし' : arr.join(', ')
 }
 
 export default function SettingsView({ data, setData }: { data: AppData; setData: (d: AppData) => void }) {
@@ -75,7 +75,7 @@ export default function SettingsView({ data, setData }: { data: AppData; setData
         </div>
         <div style={{marginTop:8}}>
           <small>
-            間隔は「日数」です。変更は <b>次回完了以降</b> に反映されます（既存の予定日は再計算しません）。
+            間隔は「日数」です。空欄/「なし」にすると <b>復習なし</b>（単発タスク向け）になります。変更は <b>次回完了以降</b> に反映されます（既存の予定日は再計算しません）。
           </small>
         </div>
         {error && (

@@ -29,7 +29,14 @@ function seed(): AppData {
     isDefault: false,
     createdAt: t,
   }
-  return { intervalSets: [defaultSet, memSet, longSet], items: [] }
+  const noReviewSet: IntervalSet = {
+    id: uid('set'),
+    name: '復習なし',
+    intervalsDays: [],
+    isDefault: false,
+    createdAt: t,
+  }
+  return { intervalSets: [defaultSet, memSet, longSet, noReviewSet], items: [] }
 }
 
 function normalizePriority(p: any): Priority {

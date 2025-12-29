@@ -70,6 +70,7 @@ export default function App() {
         {tab === 'add' && <AddView data={data} setData={setData} />}
         {tab === 'calendar' && <CalendarView data={data} setData={setData} />}
         {tab === 'list' && <ListView data={data} setData={setData} />}
+        {tab === 'timer' && <TimerView data={data} setData={setData} />}
         {tab === 'settings' && <SettingsView data={data} setData={setData} />}
         <div className="sep" />
         <small>データはこのブラウザ内（localStorage）に保存されます。ログインや同期は未実装です。</small>

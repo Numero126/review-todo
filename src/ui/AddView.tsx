@@ -170,7 +170,7 @@ export default function AddView({ data, setData }: { data: AppData; setData: (d:
               {data.intervalSets.map(s => (
                 <option key={s.id} value={s.id}>
                   {s.name}
-                  {s.isDefault ? '（デフォルト）' : ''} — [{s.intervalsDays.join(', ')}]
+                  {s.isDefault ? '（デフォルト）' : ''} — [{s.intervalsDays.length===0 ? 'なし' : s.intervalsDays.join(', ')}]
                 </option>
               ))}
             </select>
