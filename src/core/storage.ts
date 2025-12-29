@@ -1,4 +1,4 @@
-import type { AppData, IntervalSet, Item } from './types'
+import type { AppData, IntervalSet, Item, Priority } from './types'
 import { todayJST } from './date'
 import { uid } from './id'
 
@@ -18,7 +18,7 @@ function seed(): AppData {
   const memSet: IntervalSet = {
     id: uid('set'),
     name: '暗記超短',
-    intervalsDays: [1, 1, 2, 4, 7, 14, 30].filter((v, i, a) => a.indexOf(v) === i).sort((a,b)=>a-b),
+    intervalsDays: [1, 1, 2, 4, 7, 14, 30].filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => a - b),
     isDefault: false,
     createdAt: t,
   }
@@ -32,6 +32,11 @@ function seed(): AppData {
   return { intervalSets: [defaultSet, memSet, longSet], items: [] }
 }
 
+function normalizePriority(p: any): Priority {
+  if (p === 1 || p === 2 || p === 3) return p
+  return 2
+}
+
 function normalize(data: AppData): AppData {
   const intervalSets = (data.intervalSets ?? []).map(s => ({ ...s }))
   if (intervalSets.length === 0) return seed()
@@ -42,17 +47,27 @@ function normalize(data: AppData): AppData {
   if (intervalSets.filter(s => s.isDefault).length > 1) {
     let first = true
     for (const s of intervalSets) {
-      s.isDefault = first ? (first = false, true) : false
+      if (first) {
+        s.isDefault = true
+        first = false
+      } else {
+        s.isDefault = false
+      }
     }
   }
 
   const defaultSet = intervalSets.find(s => s.isDefault) ?? intervalSets[0]
-  const items = (data.items ?? []).map(it => ({
+
+  const items = (data.items ?? []).map((it: any) => ({
     ...it,
     intervalSetId: it.intervalSetId ?? defaultSet.id,
-    // undo は任意なので、なければ undefined のまま
-    undo: (it as any).undo ?? undefined,
-  }))
+    undo: it.undo ?? undefined,
+
+    // v4 fields (migration defaults)
+    priority: normalizePriority(it.priority),
+    targetMinutes: typeof it.targetMinutes === 'number' ? it.targetMinutes : null,
+    notes: typeof it.notes === 'string' ? it.notes : '',
+  })) as Item[]
 
   return { intervalSets, items }
 }
@@ -89,7 +104,15 @@ export function getSetById(sets: IntervalSet[], id: string | null | undefined): 
 }
 
 export function createItem(
-  params: { title: string; tags: string[]; intervalSetId: string | null; startDue?: string },
+  params: {
+    title: string
+    tags: string[]
+    intervalSetId: string | null
+    startDue?: string
+    priority?: Priority
+    targetMinutes?: number | null
+    notes?: string
+  },
   sets: IntervalSet[],
 ): Item {
   const t = todayJST()
@@ -103,5 +126,9 @@ export function createItem(
     lastDone: null,
     createdAt: t,
     intervalSetId: params.intervalSetId ?? getDefaultSet(sets).id,
+
+    priority: params.priority ?? 2,
+    targetMinutes: typeof params.targetMinutes === 'number' ? params.targetMinutes : null,
+    notes: params.notes ?? '',
   }
 }

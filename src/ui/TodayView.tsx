@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
-import type { AppData, Item } from '../core/types'
+import type { AppData, Item, Priority } from '../core/types'
 import { todayJST, tomorrowJST, cmpISO } from '../core/date'
-import { getSetById } from '../core/storage'
+import { getSetById, createItem } from '../core/storage'
 import { completeItem, getTodayTodos, getCompletedOnDate, moveDueDate, resetItem, undoComplete } from '../core/scheduler'
 
 function tagBadges(tags: string[]) {
@@ -14,15 +14,171 @@ function tagBadges(tags: string[]) {
   )
 }
 
-function daysAgoLabel(due: string, today: string): string {
-  if (cmpISO(due, today) === 0) return '今日'
-  if (cmpISO(due, today) > 0) return '未来'
+function priorityBadge(p: Priority) {
+  const cls = p === 1 ? 'badge badge-pri1' : p === 3 ? 'badge badge-pri3' : 'badge badge-pri2'
+  const txt = p === 1 ? '優先: 高' : p === 3 ? '優先: 低' : '優先: 中'
+  return <span className={cls}>{txt}</span>
+}
+
+function minutesBadge(m: number | null) {
+  if (m == null) return null
+  return <span className="badge">{m}分</span>
+}
+
+function dueLabel(due: string, today: string) {
   const [y1, m1, d1] = due.split('-').map(Number)
   const [y2, m2, d2] = today.split('-').map(Number)
   const a = Date.UTC(y1, m1 - 1, d1)
   const b = Date.UTC(y2, m2 - 1, d2)
   const diff = Math.round((b - a) / (1000 * 60 * 60 * 24))
-  return `${diff}日前（期限）`
+  if (diff === 0) return '今日'
+  if (diff === 1) return '昨日（期限）'
+  if (diff > 1) return `${diff}日前（期限）`
+  return '未来'
+}
+
+function parseQuick(line: string): { title: string; tags: string[]; priority?: Priority; targetMinutes?: number | null } | null {
+  const raw = line.trim()
+  if (!raw) return null
+  const parts = raw.split(/\s+/)
+  const tags: string[] = []
+  let priority: Priority | undefined
+  let targetMinutes: number | null | undefined
+  const titleParts: string[] = []
+  for (const p of parts) {
+    if (p.startsWith('#') && p.length > 1) { tags.push(p.slice(1)); continue }
+    if (/^!([1-3])$/.test(p)) { priority = Number(p.slice(1)) as Priority; continue }
+    if (/^(~?\d+)(m|min)$/i.test(p)) { const n = Number(p.replace(/[^0-9]/g,'')); if (!Number.isNaN(n)) targetMinutes = n; continue }
+    if (/^~\d+$/.test(p)) { const n = Number(p.slice(1)); if (!Number.isNaN(n)) targetMinutes = n; continue }
+    titleParts.push(p)
+  }
+  const title = titleParts.join(' ').trim()
+  if (!title) return null
+  return { title, tags, priority, targetMinutes }
+}
+
+function updateItem(data: AppData, id: string, patch: Partial<Item>): AppData {
+  return { ...data, items: data.items.map(it => (it.id === id ? ({ ...it, ...patch }) : it)) }
+}
+
+function TodoRow({
+  item,
+  data,
+  today,
+  tomorrow,
+  onComplete,
+  onReset,
+  onMoveTomorrow,
+  onMoveDate,
+  onUndo,
+  showToast,
+  setData,
+}: {
+  item: Item
+  data: AppData
+  today: string
+  tomorrow: string
+  onComplete: () => void
+  onReset: () => void
+  onMoveTomorrow: () => void
+  onMoveDate: (d: string) => void
+  onUndo?: () => void
+  showToast: (m: string) => void
+  setData: (d: AppData) => void
+}) {
+  const setInfo = getSetById(data.intervalSets, item.intervalSetId)
+  const [date, setDate] = useState(item.nextDue)
+  const [open, setOpen] = useState(false)
+  const [pri, setPri] = useState<Priority>(item.priority ?? 2)
+  const [mins, setMins] = useState<string>(item.targetMinutes == null ? '' : String(item.targetMinutes))
+  const [notes, setNotes] = useState(item.notes ?? '')
+
+  function saveDetails() {
+    const m = mins.trim() ? Number(mins.trim()) : null
+    setData(updateItem(data, item.id, { priority: pri, targetMinutes: Number.isFinite(m as any) ? m : null, notes }))
+    showToast('保存しました')
+  }
+
+  return (
+    <div className="card">
+      <div className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 800, wordBreak: 'break-word' }}>{item.title}</div>
+          <div className="row-wrap" style={{ marginTop: 8 }}>
+            <span className={'badge ' + (cmpISO(item.nextDue, today) < 0 ? 'badge-overdue' : '')}>
+              期限：{item.nextDue}（{dueLabel(item.nextDue, today)}）
+            </span>
+            {priorityBadge(item.priority ?? 2)}
+            {minutesBadge(item.targetMinutes ?? null)}
+            <span className="badge">間隔：{setInfo.name} / stage {item.stage}</span>
+          </div>
+          <div style={{ marginTop: 8 }}>{tagBadges(item.tags)}</div>
+          {item.notes ? (
+            <div style={{ marginTop: 10, whiteSpace: 'pre-wrap' }}>
+              <small className="muted">備考：</small>
+              <div>{item.notes}</div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="col" style={{ alignItems: 'flex-end', gap: 8 }}>
+          <button className="btn btn-primary" onClick={onComplete}>
+            完了
+          </button>
+          <button className="btn" onClick={onMoveTomorrow}>
+            明日へ
+          </button>
+          <div className="row" style={{ gap: 8 }}>
+            <input type="date" value={date} onChange={e => { setDate(e.target.value); }} style={{ maxWidth: 160 }} />
+            <button className="btn" onClick={() => onMoveDate(date)}>
+              日付
+            </button>
+          </div>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn" onClick={onReset} title="stage=0 / 期限=今日に戻します">
+              リセット
+            </button>
+            {onUndo ? (
+              <button className="btn" onClick={onUndo}>
+                取り消し
+              </button>
+            ) : null}
+          </div>
+          <button className="btn" onClick={() => setOpen(!open)}>{open ? '詳細を閉じる' : '詳細（編集）'}</button>
+        </div>
+      </div>
+
+      {open ? (
+        <>
+          <div className="sep" />
+          <div className="grid grid-2">
+            <div>
+              <label>優先度</label>
+              <select value={pri} onChange={e => setPri(Number(e.target.value) as any)}>
+                <option value="1">高（1）</option>
+                <option value="2">中（2）</option>
+                <option value="3">低（3）</option>
+              </select>
+            </div>
+            <div>
+              <label>目標時間（分）</label>
+              <input inputMode="numeric" placeholder="例：30" value={mins} onChange={e => setMins(e.target.value)} />
+            </div>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <label>備考（メモ）</label>
+            <textarea rows={4} value={notes} onChange={e => setNotes(e.target.value)} />
+          </div>
+          <div className="row" style={{ marginTop: 12, gap: 10 }}>
+            <button className="btn btn-primary" onClick={saveDetails}>
+              保存
+            </button>
+            <small className="muted">優先度 / 目標時間 / 備考 を更新します</small>
+          </div>
+        </>
+      ) : null}
+    </div>
+  )
 }
 
 export default function TodayView({ data, setData }: { data: AppData; setData: (d: AppData) => void }) {
@@ -31,104 +187,155 @@ export default function TodayView({ data, setData }: { data: AppData; setData: (
 
   const todosToday = useMemo(() => getTodayTodos(data, today), [data, today])
   const completedToday = useMemo(() => getCompletedOnDate(data, today), [data, today])
-  const todosTomorrowExact = useMemo(
-    () => data.items.filter(it => it.nextDue === tomorrow).sort((a, b) => a.title.localeCompare(b.title, 'ja')),
-    [data.items, tomorrow],
-  )
+  const todosTomorrowExact = useMemo(() => data.items.filter(it => it.nextDue === tomorrow).sort((a, b) => a.title.localeCompare(b.title, 'ja')), [data.items, tomorrow])
 
   const overdueCount = useMemo(() => todosToday.filter(it => cmpISO(it.nextDue, today) < 0).length, [todosToday, today])
 
   const [query, setQuery] = useState('')
   const [toast, setToast] = useState<string | null>(null)
+  const [quick, setQuick] = useState('')
 
   function showToast(msg: string) {
     setToast(msg)
     window.setTimeout(() => setToast(null), 2200)
   }
 
+  function onQuickAdd() {
+    const parsed = parseQuick(quick)
+    if (!parsed) return
+    const defaultSet = data.intervalSets.find(s => s.isDefault) ?? data.intervalSets[0]
+    const item = createItem(
+      {
+        title: parsed.title,
+        tags: parsed.tags,
+        intervalSetId: defaultSet.id,
+        startDue: today,
+        priority: parsed.priority ?? 2,
+        targetMinutes: parsed.targetMinutes ?? null,
+        notes: '',
+      },
+      data.intervalSets,
+    )
+    setData({ ...data, items: [item, ...data.items] })
+    setQuick('')
+    showToast('追加しました')
+  }
+
   const filteredToday = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return todosToday
-    return todosToday.filter(
-      it => it.title.toLowerCase().includes(q) || it.tags.some(t => t.toLowerCase().includes(q)),
-    )
-  }, [todosToday, query])
+    return todosToday.filter(it => (it.title + ' ' + it.tags.join(' ') + ' ' + (it.notes ?? '')).toLowerCase().includes(q))
+  }, [query, todosToday])
 
   return (
     <div className="grid grid-2">
       <div className="card">
         <div className="row" style={{ justifyContent: 'space-between' }}>
-          <h1>今日のToDo</h1>
-          <span className={'badge ' + (overdueCount > 0 ? 'badge-overdue' : '')}>
-            {overdueCount > 0 ? `期限切れ ${overdueCount}` : '期限切れなし'}
-          </span>
-        </div>
-
-        <div style={{ marginTop: 10 }}>
-          <input placeholder="検索（タイトル/タグ）" value={query} onChange={e => setQuery(e.target.value)} />
-        </div>
-
-        {toast && (
-          <div style={{ marginTop: 10 }} className="badge">
-            {toast}
+          <h1>今日</h1>
+          <div className="row" style={{ gap: 8 }}>
+            <span className="badge">今日のToDo: {todosToday.length}</span>
+            <span className="badge badge-overdue">期限切れ: {overdueCount}</span>
           </div>
-        )}
+        </div>
 
         <div className="sep" />
 
-        {filteredToday.length === 0 ? (
-          <div>
-            <p style={{ marginTop: 0 }}>今日やる復習はありません。</p>
-            <small>「追加」から新規を登録すると、今日 / 明日のToDoに入れられます。</small>
-          </div>
-        ) : (
-          <div className="grid">
-            {filteredToday.map(it => (
-              <TodoRow
-                key={it.id}
-                item={it}
-                data={data}
-                today={today}
-                tomorrow={tomorrow}
-                onComplete={() => {
-                  setData(completeItem(data, it.id, today))
-                  showToast('完了しました（下の「完了済み」に残ります）')
-                }}
-                onReset={() => {
-                  setData(resetItem(data, it.id, today))
-                  showToast('やり直しにしました（stage=0 / 期限=今日）')
-                }}
-                onMoveTomorrow={() => {
-                  setData(moveDueDate(data, it.id, tomorrow))
-                  showToast('明日に回しました')
-                }}
-                onMoveDate={(d) => {
-                  setData(moveDueDate(data, it.id, d))
-                  showToast(`期限を ${d} に変更しました`)
-                }}
-                onChangeSet={setId => {
-                  const items = data.items.map(x => (x.id === it.id ? { ...x, intervalSetId: setId } : x))
-                  setData({ ...data, items })
-                  showToast('間隔セットを変更しました（次回完了以降に反映）')
-                }}
-              />
-            ))}
-          </div>
-        )}
+        <label>クイック追加（Enter）</label>
+        <input
+          placeholder="例：工業簿記 標準原価 #工業簿記 !1 ~40"
+          value={quick}
+          onChange={e => setQuick(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') onQuickAdd()
+          }}
+        />
+        <small className="muted">#タグ / !1〜!3（優先度） / ~30（分）に対応。間隔セットはデフォルトで「今日」に追加します。</small>
 
         <div className="sep" />
 
-        <details open>
-          <summary style={{ cursor: 'pointer', fontWeight: 700 }}>完了済み（今日）: {completedToday.length}</summary>
-          <div style={{ marginTop: 10 }} className="grid">
-            {completedToday.length === 0 ? (
-              <small>まだありません。</small>
-            ) : (
-              completedToday.map(it => (
-                <CompletedRow
+        <label>検索</label>
+        <input placeholder="タイトル / タグ / 備考 で検索" value={query} onChange={e => setQuery(e.target.value)} />
+
+        <div style={{ marginTop: 12 }}>
+          {filteredToday.length === 0 ? (
+            <div>
+              <p style={{ marginTop: 0 }}>今日やる復習はありません。</p>
+              <small>「追加」または上のクイック追加で登録できます。</small>
+            </div>
+          ) : (
+            <div className="grid">
+              {filteredToday.map(it => (
+                <TodoRow
                   key={it.id}
                   item={it}
                   data={data}
+                  today={today}
+                  tomorrow={tomorrow}
+                  setData={setData}
+                  showToast={showToast}
+                  onComplete={() => {
+                    setData(completeItem(data, it.id, today))
+                    showToast('完了しました（下の「完了済み」に残ります）')
+                  }}
+                  onReset={() => {
+                    setData(resetItem(data, it.id, today))
+                    showToast('やり直しにしました（stage=0 / 期限=今日）')
+                  }}
+                  onMoveTomorrow={() => {
+                    setData(moveDueDate(data, it.id, tomorrow))
+                    showToast('明日に回しました')
+                  }}
+                  onMoveDate={d => {
+                    setData(moveDueDate(data, it.id, d))
+                    showToast(`期限を ${d} に変更しました`)
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {toast ? (
+          <div className="toast" role="status">
+            {toast}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="card">
+        <h2 style={{ marginTop: 0 }}>完了済み（今日）: {completedToday.length}</h2>
+
+        <details open>
+          <summary style={{ cursor: 'pointer', fontWeight: 700 }}>一覧</summary>
+          <div style={{ marginTop: 10 }} className="grid">
+            {completedToday.length === 0 ? (
+              <small className="muted">まだありません。</small>
+            ) : (
+              completedToday.map(it => (
+                <TodoRow
+                  key={it.id}
+                  item={it}
+                  data={data}
+                  today={today}
+                  tomorrow={tomorrow}
+                  setData={setData}
+                  showToast={showToast}
+                  onComplete={() => {
+                    // already completed today, no-op
+                    showToast('既に完了しています')
+                  }}
+                  onReset={() => {
+                    setData(resetItem(data, it.id, today))
+                    showToast('やり直しにしました（stage=0 / 期限=今日）')
+                  }}
+                  onMoveTomorrow={() => {
+                    setData(moveDueDate(data, it.id, tomorrow))
+                    showToast('明日に回しました')
+                  }}
+                  onMoveDate={d => {
+                    setData(moveDueDate(data, it.id, d))
+                    showToast(`期限を ${d} に変更しました`)
+                  }}
                   onUndo={() => {
                     setData(undoComplete(data, it.id))
                     showToast('取り消しました（今日のToDoに戻る場合があります）')
@@ -145,243 +352,27 @@ export default function TodayView({ data, setData }: { data: AppData; setData: (
           <summary style={{ cursor: 'pointer', fontWeight: 700 }}>明日のToDo（予定）: {todosTomorrowExact.length}</summary>
           <div style={{ marginTop: 10 }} className="grid">
             {todosTomorrowExact.length === 0 ? (
-              <small>「追加」で「明日」を選ぶか、今日のToDoを「明日に回す」してください。</small>
+              <small className="muted">まだありません。</small>
             ) : (
               todosTomorrowExact.map(it => (
-                <TomorrowRow
-                  key={it.id}
-                  item={it}
-                  data={data}
-                  today={today}
-                  onMoveToday={() => {
-                    setData(moveDueDate(data, it.id, today))
-                    showToast('今日に戻しました')
-                  }}
-                  onMoveDate={(d) => {
-                    setData(moveDueDate(data, it.id, d))
-                    showToast(`期限を ${d} に変更しました`)
-                  }}
-                  onChangeSet={setId => {
-                    const items = data.items.map(x => (x.id === it.id ? { ...x, intervalSetId: setId } : x))
-                    setData({ ...data, items })
-                    showToast('間隔セットを変更しました（次回完了以降に反映）')
-                  }}
-                />
+                <div key={it.id} className="card">
+                  <div style={{ fontWeight: 800, wordBreak: 'break-word' }}>{it.title}</div>
+                  <div className="row-wrap" style={{ marginTop: 8 }}>
+                    {priorityBadge(it.priority ?? 2)}
+                    {minutesBadge(it.targetMinutes ?? null)}
+                    <button className="btn" onClick={() => setData(moveDueDate(data, it.id, today))} title="今日に戻します">
+                      今日へ
+                    </button>
+                    <button className="btn" onClick={() => (location.hash = '#timer')} title="タイマーで取り組む">
+                      タイマーへ
+                    </button>
+                  </div>
+                  <div style={{ marginTop: 8 }}>{tagBadges(it.tags)}</div>
+                </div>
               ))
             )}
           </div>
         </details>
-      </div>
-
-      <div className="card">
-        <h2>今日の目安</h2>
-        <div className="row-wrap">
-          <span className="badge">
-            日付：<span className="mono">{today}</span>
-          </span>
-          <span className="badge">今日ToDo：{todosToday.length}</span>
-          <span className="badge">完了：{completedToday.length}</span>
-          <span className="badge">明日予定：{todosTomorrowExact.length}</span>
-        </div>
-
-        <div className="sep" />
-        <h2>ボタンの意味</h2>
-        <ul style={{ marginTop: 0, paddingLeft: 18, color: '#333' }}>
-          <li>
-            <b>完了</b>：復習間隔に従って次回日付を自動設定し、stageを進めます。今日の完了済みリストに残ります。
-          </li>
-          <li>
-            <b>取り消し</b>：直近の完了操作を元に戻します（stage/期限/lastDone）。
-          </li>
-          <li>
-            <b>明日に回す</b>：このタスクの期限（nextDue）だけを明日に動かします（stageは進みません）。
-          </li>
-          <li>
-            <b>日付</b>：カレンダー（date入力）で期限を指定できます（stageは進みません）。
-          </li>
-          <li>
-            <b>やり直し</b>：stageを0に戻し、期限を今日に戻します。完了扱い（lastDone）も消します。
-          </li>
-          <li>
-            <b>間隔</b>：その勉強内容に紐づく「間隔セット」を変更できます（次回完了以降に反映）。
-          </li>
-        </ul>
-        <div className="sep" />
-        <small className="muted">「カレンダー」タブでは、日付ごとの予定を一覧できます。</small>
-      </div>
-    </div>
-  )
-}
-
-function IntervalPicker({ data, currentId, onChange }: { data: AppData; currentId: string; onChange: (id: string) => void }) {
-  return (
-    <select value={currentId} onChange={e => onChange(e.target.value)}>
-      {data.intervalSets.map(s => (
-        <option key={s.id} value={s.id}>
-          {s.name}
-          {s.isDefault ? '（デフォルト）' : ''} — [{s.intervalsDays.join(', ')}]
-        </option>
-      ))}
-    </select>
-  )
-}
-
-function DatePicker({ value, onChange }: { value: string; onChange: (d: string) => void }) {
-  return (
-    <input
-      type="date"
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      style={{ maxWidth: 170 }}
-      aria-label="期限日"
-    />
-  )
-}
-
-function TodoRow(props: {
-  item: Item
-  data: AppData
-  today: string
-  tomorrow: string
-  onComplete: () => void
-  onReset: () => void
-  onMoveTomorrow: () => void
-  onMoveDate: (d: string) => void
-  onChangeSet: (setId: string) => void
-}) {
-  const { item, data, today, tomorrow, onComplete, onReset, onMoveTomorrow, onMoveDate, onChangeSet } = props
-  const set = getSetById(data.intervalSets, item.intervalSetId)
-  const overdue = cmpISO(item.nextDue, today) < 0
-  const [showDate, setShowDate] = useState(false)
-
-  return (
-    <div className="card" style={{ borderColor: overdue ? '#b00020' : undefined }}>
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700, wordBreak: 'break-word' }}>{item.title}</div>
-
-          <div className="row-wrap" style={{ marginTop: 6 }}>
-            <span className={'badge ' + (overdue ? 'badge-overdue' : '')}>{daysAgoLabel(item.nextDue, today)}</span>
-
-            <details>
-              <summary className="badge" style={{ cursor: 'pointer' }}>
-                間隔：{set.name}
-              </summary>
-              <div style={{ marginTop: 8 }}>
-                <IntervalPicker data={data} currentId={set.id} onChange={onChangeSet} />
-                <div style={{ marginTop: 6 }}>
-                  <small>※変更は次回完了以降に反映（予定日は再計算しません）</small>
-                </div>
-              </div>
-            </details>
-
-            <span className="badge">stage：{item.stage}</span>
-            <span className="badge">
-              次回：<span className="mono">{item.nextDue}</span>
-            </span>
-
-            <button className="btn" onClick={() => setShowDate(v => !v)} title="期限日を指定">
-              日付
-            </button>
-            {showDate && <DatePicker value={item.nextDue} onChange={onMoveDate} />}
-          </div>
-
-          {item.tags.length > 0 && <div style={{ marginTop: 8 }}>{tagBadges(item.tags)}</div>}
-
-          <div style={{ marginTop: 8 }}>
-            <small>最後：{item.lastDone ? item.lastDone : '未完了'}</small>
-          </div>
-        </div>
-
-        <div className="row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <button className="btn btn-primary" onClick={onComplete}>
-            完了
-          </button>
-          <button className="btn" onClick={onMoveTomorrow} title={`期限を${tomorrow}に動かします（stageは進みません）`}>
-            明日に回す
-          </button>
-          <button className="btn" onClick={onReset} title="stageを0に戻し、期限を今日に戻します">
-            やり直し
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function CompletedRow({ item, data, onUndo }: { item: Item; data: AppData; onUndo: () => void }) {
-  const set = getSetById(data.intervalSets, item.intervalSetId)
-  return (
-    <div className="card">
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700, wordBreak: 'break-word' }}>{item.title}</div>
-          <div className="row-wrap" style={{ marginTop: 6 }}>
-            <span className="badge">間隔：{set.name}</span>
-            <span className="badge">
-              次回：<span className="mono">{item.nextDue}</span>
-            </span>
-            <span className="badge">stage：{item.stage}</span>
-          </div>
-          {item.tags.length > 0 && <div style={{ marginTop: 8 }}>{tagBadges(item.tags)}</div>}
-        </div>
-        <div className="row" style={{ gap: 8 }}>
-          <button className="btn" disabled={!item.undo} onClick={onUndo} title="直近の完了を取り消します">
-            取り消し
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function TomorrowRow(props: {
-  item: Item
-  data: AppData
-  today: string
-  onMoveToday: () => void
-  onMoveDate: (d: string) => void
-  onChangeSet: (setId: string) => void
-}) {
-  const { item, data, today, onMoveToday, onMoveDate, onChangeSet } = props
-  const set = getSetById(data.intervalSets, item.intervalSetId)
-  const [showDate, setShowDate] = useState(false)
-
-  return (
-    <div className="card">
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700, wordBreak: 'break-word' }}>{item.title}</div>
-          <div className="row-wrap" style={{ marginTop: 6 }}>
-            <details>
-              <summary className="badge" style={{ cursor: 'pointer' }}>
-                間隔：{set.name}
-              </summary>
-              <div style={{ marginTop: 8 }}>
-                <IntervalPicker data={data} currentId={set.id} onChange={onChangeSet} />
-                <div style={{ marginTop: 6 }}>
-                  <small>※変更は次回完了以降に反映</small>
-                </div>
-              </div>
-            </details>
-
-            <span className="badge">
-              次回：<span className="mono">{item.nextDue}</span>
-            </span>
-
-            <button className="btn" onClick={() => setShowDate(v => !v)} title="期限日を指定">
-              日付
-            </button>
-            {showDate && <DatePicker value={item.nextDue} onChange={onMoveDate} />}
-          </div>
-          {item.tags.length > 0 && <div style={{ marginTop: 8 }}>{tagBadges(item.tags)}</div>}
-        </div>
-
-        <div className="row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <button className="btn" onClick={onMoveToday} title={`期限を${today}に戻します`}>
-            今日に戻す
-          </button>
-        </div>
       </div>
     </div>
   )

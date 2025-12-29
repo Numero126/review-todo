@@ -14,6 +14,8 @@ export type UndoSnapshot = {
   lastDone: ISODate | null
 }
 
+export type Priority = 1 | 2 | 3 // 1=高,2=中,3=低
+
 export type Item = {
   id: string
   title: string
@@ -24,6 +26,11 @@ export type Item = {
   createdAt: ISODate
   intervalSetId: string | null // null => default
   undo?: UndoSnapshot // 直近の完了を「取り消し」するためのスナップショット（任意）
+
+  // v4: 計画/メモ
+  priority: Priority
+  targetMinutes: number | null
+  notes: string
 }
 
 export type AppData = {

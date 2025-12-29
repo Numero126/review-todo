@@ -6,12 +6,13 @@ import AddView from './AddView'
 import SettingsView from './SettingsView'
 import CalendarView from './CalendarView'
 import ListView from './ListView'
+import TimerView from './TimerView'
 
-type Tab = 'today' | 'add' | 'calendar' | 'list' | 'settings'
+type Tab = 'today' | 'add' | 'calendar' | 'list' | 'timer' | 'settings'
 
 function getTabFromHash(): Tab {
   const h = (location.hash || '').replace('#', '')
-  if (h === 'add' || h === 'settings' || h === 'calendar' || h === 'list') return h
+  if (h === 'add' || h === 'settings' || h === 'calendar' || h === 'list' || h === 'timer') return h
   return 'today'
 }
 
@@ -53,6 +54,9 @@ export default function App() {
           </button>
           <button className={'tab ' + (tab === 'list' ? 'active' : '')} onClick={() => (location.hash = '#list')}>
             一覧
+          </button>
+          <button className={'tab ' + (tab === 'timer' ? 'active' : '')} onClick={() => (location.hash = '#timer')}>
+            タイマー
           </button>
           <button className={'tab ' + (tab === 'settings' ? 'active' : '')} onClick={() => (location.hash = '#settings')}>
             設定
