@@ -1,4 +1,4 @@
-# 復習ToDo（固定間隔・内容別セット）v3
+# 復習ToDo（固定間隔・内容別セット）v3 (fixed build)
 
 ## 起動方法
 1. Node.js 18+ を用意してください
@@ -14,7 +14,7 @@ ExecutionPolicyの都合で `npm.ps1` が実行できないことがあります
 - もしくは一時的に許可：
   - `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
 
-## 追加された機能（v3）
+## 追加された機能（v3 (fixed build)）
 - カレンダータブ：日付を選んで、その日の予定（nextDue=当日）と期限切れを確認・リスケ
 - 完了済み（今日）に「取り消し」ボタン：直近の完了を元に戻せます
 - 一覧タブ：全タスク検索、タグ別フィルタ、期限順、苦手（期限切れ日数）可視化

@@ -15,17 +15,6 @@ function seed(): AppData {
     isDefault: true,
     createdAt: t,
   }
-
-function normalize(data: AppData): AppData {
-  const defaultSet = getDefaultSet(data.intervalSets)
-  const items = (data.items ?? []).map(it => ({
-    ...it,
-    intervalSetId: it.intervalSetId ?? defaultSet.id,
-    undo: (it as any).undo ?? undefined,
-  }))
-  return { ...data, items }
-}
-
   const memSet: IntervalSet = {
     id: uid('set'),
     name: '暗記超短',
@@ -43,26 +32,43 @@ function normalize(data: AppData): AppData {
   return { intervalSets: [defaultSet, memSet, longSet], items: [] }
 }
 
+function normalize(data: AppData): AppData {
+  const intervalSets = (data.intervalSets ?? []).map(s => ({ ...s }))
+  if (intervalSets.length === 0) return seed()
+
+  // Ensure exactly one default
+  const hasDefault = intervalSets.some(s => s.isDefault)
+  if (!hasDefault) intervalSets[0].isDefault = true
+  if (intervalSets.filter(s => s.isDefault).length > 1) {
+    let first = true
+    for (const s of intervalSets) {
+      s.isDefault = first ? (first = false, true) : false
+    }
+  }
+
+  const defaultSet = intervalSets.find(s => s.isDefault) ?? intervalSets[0]
+  const items = (data.items ?? []).map(it => ({
+    ...it,
+    intervalSetId: it.intervalSetId ?? defaultSet.id,
+    // undo は任意なので、なければ undefined のまま
+    undo: (it as any).undo ?? undefined,
+  }))
+
+  return { intervalSets, items }
+}
+
 export function loadData(): AppData {
   const raw = localStorage.getItem(KEY)
   if (!raw) {
-    const s = seed()
+    const s = normalize(seed())
     localStorage.setItem(KEY, JSON.stringify(s))
-    return normalize(s)
+    return s
   }
   try {
     const parsed = JSON.parse(raw) as AppData
-    if (!parsed.intervalSets?.length) return seed()
-    // Ensure exactly one default
-    const hasDefault = parsed.intervalSets.some(s => s.isDefault)
-    if (!hasDefault) parsed.intervalSets[0].isDefault = true
-    if (parsed.intervalSets.filter(s => s.isDefault).length > 1) {
-      let first = true
-      parsed.intervalSets = parsed.intervalSets.map(s => ({ ...s, isDefault: first ? (first=false, true) : false }))
-    }
     return normalize(parsed)
   } catch {
-    const s = seed()
+    const s = normalize(seed())
     localStorage.setItem(KEY, JSON.stringify(s))
     return s
   }
@@ -76,9 +82,10 @@ export function getDefaultSet(sets: IntervalSet[]): IntervalSet {
   return sets.find(s => s.isDefault) ?? sets[0]
 }
 
-export function getSetById(sets: IntervalSet[], id: string | null): IntervalSet {
-  if (!id) return getDefaultSet(sets)
-  return sets.find(s => s.id === id) ?? getDefaultSet(sets)
+export function getSetById(sets: IntervalSet[], id: string | null | undefined): IntervalSet {
+  const defaultSet = getDefaultSet(sets)
+  if (!id) return defaultSet
+  return sets.find(s => s.id === id) ?? defaultSet
 }
 
 export function createItem(
